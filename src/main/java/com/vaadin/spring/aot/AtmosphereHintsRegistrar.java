@@ -19,36 +19,36 @@ import java.util.HashSet;
 import java.util.Set;
 
 /* todo upstream these to the Atmosphere project */
-public class AtmosphereHintsRegistrar implements RuntimeHintsRegistrar {
+class AtmosphereHintsRegistrar implements RuntimeHintsRegistrar {
 
-	@Override
-	public void registerHints(RuntimeHints hints, ClassLoader classLoader) {
-		hints.resources().registerResource(new ClassPathResource("org/atmosphere/util/version.properties"));
-		var reflectionHints = hints.reflection();
+    @Override
+    public void registerHints(RuntimeHints hints, ClassLoader classLoader) {
+        hints.resources().registerResource(new ClassPathResource("org/atmosphere/util/version.properties"));
+        var reflectionHints = hints.reflection();
 
-		for (Class<?> c : getAtmosphereClasses()) {
-			reflectionHints.registerType(c, MemberCategory.values());
-		}
-	}
+        for (Class<?> c : getAtmosphereClasses()) {
+            reflectionHints.registerType(c, MemberCategory.values());
+        }
+    }
 
-	private Collection<? extends Class<?>> getAtmosphereClasses() {
-		Set<Class<?>> classes = new HashSet<>();
-		classes.add(DefaultAtmosphereResourceFactory.class);
-		classes.add(SimpleHttpProtocol.class);
-		classes.addAll(AtmosphereFramework.DEFAULT_ATMOSPHERE_INTERCEPTORS);
-		classes.add(AtmosphereResourceLifecycleInterceptor.class);
-		classes.add(TrackMessageSizeInterceptor.class);
-		classes.add(SuspendTrackerInterceptor.class);
-		classes.add(DefaultBroadcasterFactory.class);
-		classes.add(SimpleBroadcaster.class);
-		classes.add(DefaultBroadcaster.class);
-		classes.add(UUIDBroadcasterCache.class);
-		classes.add(VoidAnnotationProcessor.class);
-		classes.add(DefaultAtmosphereResourceSessionFactory.class);
-		classes.add(JSR356AsyncSupport.class);
-		classes.add(DefaultMetaBroadcaster.class);
+    private Collection<? extends Class<?>> getAtmosphereClasses() {
+        Set<Class<?>> classes = new HashSet<>();
+        classes.add(DefaultAtmosphereResourceFactory.class);
+        classes.add(SimpleHttpProtocol.class);
+        classes.addAll(AtmosphereFramework.DEFAULT_ATMOSPHERE_INTERCEPTORS);
+        classes.add(AtmosphereResourceLifecycleInterceptor.class);
+        classes.add(TrackMessageSizeInterceptor.class);
+        classes.add(SuspendTrackerInterceptor.class);
+        classes.add(DefaultBroadcasterFactory.class);
+        classes.add(SimpleBroadcaster.class);
+        classes.add(DefaultBroadcaster.class);
+        classes.add(UUIDBroadcasterCache.class);
+        classes.add(VoidAnnotationProcessor.class);
+        classes.add(DefaultAtmosphereResourceSessionFactory.class);
+        classes.add(JSR356AsyncSupport.class);
+        classes.add(DefaultMetaBroadcaster.class);
 
-		return classes;
-	}
+        return classes;
+    }
 
 }
