@@ -19,6 +19,8 @@ import org.atmosphere.util.SimpleBroadcaster;
 import org.atmosphere.util.VoidAnnotationProcessor;
 import org.atmosphere.websocket.protocol.SimpleHttpProtocol;
 import org.reflections.Reflections;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.aot.hint.MemberCategory;
 import org.springframework.aot.hint.RuntimeHints;
 import org.springframework.aot.hint.RuntimeHintsRegistrar;
@@ -44,13 +46,8 @@ import java.util.*;
 class AotAutoConfiguration {
 
 	@Bean
-	static FlowBeanFactoryInitializationAotProcessor flowBeanFactoryInitializationAotProcessor() {
-		return new FlowBeanFactoryInitializationAotProcessor();
-	}
-
-	@Bean
-	static FlowBeanDefinitionRegistryPostProcessor brdpp() {
-		return new FlowBeanDefinitionRegistryPostProcessor();
+	static FlowBeanDefinitionAotProcessor flowBeanDefinitionRegistryPostProcessor() {
+		return new FlowBeanDefinitionAotProcessor();
 	}
 
 }
@@ -109,52 +106,10 @@ abstract class FlowPackages {
 /**
  * programmatically registers beans for all types annotated with {@link Route}
  */
-class FlowBeanDefinitionRegistryPostProcessor implements BeanDefinitionRegistryPostProcessor {
+class FlowBeanDefinitionAotProcessor
+		implements BeanFactoryInitializationAotProcessor, BeanDefinitionRegistryPostProcessor {
 
-	@Override
-	public void postProcessBeanFactory(ConfigurableListableBeanFactory beanFactory) throws BeansException {
-		//
-	}
-
-	@Override
-	public void postProcessBeanDefinitionRegistry(BeanDefinitionRegistry registry) throws BeansException {
-		var statusBeanName = FlowAotRoutesStatus.class.getName();
-		System.out.println("postProcessBeanDefinitionRegistry");
-
-		if (registry.containsBeanDefinition(statusBeanName))
-			return;
-
-		if (registry instanceof BeanFactory bf) {
-			System.out.println("Registry is a bean factory");
-			var run = false;
-			for (var pkg : FlowPackages.getPackages(bf)) {
-				System.out.println(pkg);
-				var reflections = new Reflections(pkg);
-				var routeyTypes = new HashSet<Class<?>>();
-				routeyTypes.addAll(reflections.getTypesAnnotatedWith(Route.class));
-				routeyTypes.addAll(reflections.getTypesAnnotatedWith(RouteAlias.class));
-				for (var c : routeyTypes) {
-					System.out.println(c);
-					var bd = BeanDefinitionBuilder.rootBeanDefinition(c).setScope("prototype").getBeanDefinition();
-					registry.registerBeanDefinition(c.getName(), bd);
-					run = true;
-				}
-
-			}
-			if (run)
-				registry.registerBeanDefinition(statusBeanName,
-						BeanDefinitionBuilder.rootBeanDefinition(FlowAotRoutesStatus.class).getBeanDefinition());
-
-		}
-	}
-
-	static class FlowAotRoutesStatus {
-
-	}
-
-}
-
-class FlowBeanFactoryInitializationAotProcessor implements BeanFactoryInitializationAotProcessor {
+	private final Logger logger = LoggerFactory.getLogger(getClass());
 
 	@Override
 	public BeanFactoryInitializationAotContribution processAheadOfTime(ConfigurableListableBeanFactory beanFactory) {
@@ -185,6 +140,45 @@ class FlowBeanFactoryInitializationAotProcessor implements BeanFactoryInitializa
 					resources.registerPattern(r);
 			}
 		};
+	}
+
+	@Override
+	public void postProcessBeanFactory(ConfigurableListableBeanFactory beanFactory) throws BeansException {
+		//
+	}
+
+	@Override
+	public void postProcessBeanDefinitionRegistry(BeanDefinitionRegistry registry) throws BeansException {
+		var statusBeanName = FlowAotRoutesStatus.class.getName();
+		logger.debug("postProcessBeanDefinitionRegistry");
+
+		if (registry.containsBeanDefinition(statusBeanName))
+			return;
+
+		if (registry instanceof BeanFactory bf) {
+			logger.debug(registry.getClass().getName() + " is an instanceof " + bf.getClass().getName());
+			for (var pkg : FlowPackages.getPackages(bf)) {
+				logger.debug("looking in package [] for any @" + Route.class.getName() + " or @"
+						+ RouteAlias.class.getName() + " annotated beans");
+				var reflections = new Reflections(pkg);
+				var routeyTypes = new HashSet<Class<?>>();
+				routeyTypes.addAll(reflections.getTypesAnnotatedWith(Route.class));
+				routeyTypes.addAll(reflections.getTypesAnnotatedWith(RouteAlias.class));
+				for (var c : routeyTypes) {
+					logger.debug("registering a bean for the @Route-annotated class [" + c.getName() + "]");
+					var bd = BeanDefinitionBuilder.rootBeanDefinition(c).setScope("prototype").getBeanDefinition();
+					registry.registerBeanDefinition(c.getName(), bd);
+					logger.debug("registering bean [" + bd.getBeanClassName() + "]");
+				}
+			}
+			registry.registerBeanDefinition(statusBeanName,
+					BeanDefinitionBuilder.rootBeanDefinition(FlowAotRoutesStatus.class).getBeanDefinition());
+
+		}
+	}
+
+	static class FlowAotRoutesStatus {
+
 	}
 
 }
