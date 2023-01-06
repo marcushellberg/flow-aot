@@ -1,8 +1,10 @@
 package com.vaadin.spring.aot;
 
+import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.ComponentEvent;
 import com.vaadin.flow.component.login.LoginI18n;
+import com.vaadin.flow.component.messages.MessageListItem;
 import com.vaadin.flow.router.HasErrorParameter;
 import com.vaadin.flow.router.NotFoundException;
 import com.vaadin.flow.router.Route;
@@ -42,12 +44,23 @@ import org.springframework.core.io.ClassPathResource;
 import java.util.*;
 
 @AutoConfiguration
-@ImportRuntimeHints({ FlowHints.class, AtmosphereHintsRegistrar.class })
+@ImportRuntimeHints({ FlowHints.class, FlowComponentsHints.class, AtmosphereHintsRegistrar.class })
 class AotAutoConfiguration {
 
 	@Bean
 	static FlowBeanDefinitionAotProcessor flowBeanDefinitionRegistryPostProcessor() {
 		return new FlowBeanDefinitionAotProcessor();
+	}
+
+}
+
+class FlowComponentsHints implements RuntimeHintsRegistrar {
+
+	@Override
+	public void registerHints(RuntimeHints hints, ClassLoader classLoader) {
+		var mcs = MemberCategory.values();
+		for (var c : new Class[] { ToStringSerializer.class, MessageListItem.class })
+			hints.reflection().registerType(c, mcs);
 	}
 
 }
@@ -92,17 +105,6 @@ class AtmosphereHintsRegistrar implements RuntimeHintsRegistrar {
 
 }
 
-abstract class FlowPackages {
-
-	static List<String> getPackages(BeanFactory beanFactory) {
-		var listOf = new ArrayList<String>();
-		listOf.add("com.vaadin");
-		listOf.addAll(AutoConfigurationPackages.get(beanFactory));
-		return listOf;
-	}
-
-}
-
 /**
  * programmatically registers beans for all types annotated with {@link Route}
  */
@@ -118,12 +120,9 @@ class FlowBeanDefinitionAotProcessor
 			var reflection = hints.reflection();
 			var resources = hints.resources();
 			var memberCategories = MemberCategory.values();
-			for (var pkg : FlowPackages.getPackages(beanFactory)) {
+			for (var pkg : getVaadinFlowPackages(beanFactory)) {
 				var reflections = new Reflections(pkg);
-				var routeyTypes = new HashSet<Class<?>>();
-				routeyTypes.addAll(reflections.getTypesAnnotatedWith(Route.class));
-				routeyTypes.addAll(reflections.getTypesAnnotatedWith(RouteAlias.class));
-				for (var c : routeyTypes) {
+				for (var c : getRouteTypesFor(reflections, pkg)) {
 					reflection.registerType(c, memberCategories);
 					resources.registerType(c);
 				}
@@ -149,7 +148,7 @@ class FlowBeanDefinitionAotProcessor
 
 	@Override
 	public void postProcessBeanDefinitionRegistry(BeanDefinitionRegistry registry) throws BeansException {
-		var statusBeanName = FlowAotRoutesStatus.class.getName();
+		var statusBeanName = "default" + FlowAotRoutesStatus.class.getSimpleName();
 		logger.debug("postProcessBeanDefinitionRegistry");
 
 		if (registry.containsBeanDefinition(statusBeanName))
@@ -157,14 +156,11 @@ class FlowBeanDefinitionAotProcessor
 
 		if (registry instanceof BeanFactory bf) {
 			logger.debug(registry.getClass().getName() + " is an instanceof " + bf.getClass().getName());
-			for (var pkg : FlowPackages.getPackages(bf)) {
+			for (var pkg : getVaadinFlowPackages(bf)) {
 				logger.debug("looking in package [] for any @" + Route.class.getName() + " or @"
 						+ RouteAlias.class.getName() + " annotated beans");
 				var reflections = new Reflections(pkg);
-				var routeyTypes = new HashSet<Class<?>>();
-				routeyTypes.addAll(reflections.getTypesAnnotatedWith(Route.class));
-				routeyTypes.addAll(reflections.getTypesAnnotatedWith(RouteAlias.class));
-				for (var c : routeyTypes) {
+				for (var c : getRouteTypesFor(reflections, pkg)) {
 					logger.debug("registering a bean for the @Route-annotated class [" + c.getName() + "]");
 					var bd = BeanDefinitionBuilder.rootBeanDefinition(c).setScope("prototype").getBeanDefinition();
 					registry.registerBeanDefinition(c.getName(), bd);
@@ -175,10 +171,31 @@ class FlowBeanDefinitionAotProcessor
 					BeanDefinitionBuilder.rootBeanDefinition(FlowAotRoutesStatus.class).getBeanDefinition());
 
 		}
+		else {
+			logger.warn("the " + BeanFactory.class.getName() + " is not an instance of "
+					+ BeanDefinitionRegistry.class.getName() + '.'
+					+ " Unable to register bean definitions for classes annotated with " + Route.class.getName()
+					+ " and " + RouteAlias.class.getName());
+
+		}
+	}
+
+	private static Collection<Class<?>> getRouteTypesFor(Reflections reflections, String packageName) {
+		var routeyTypes = new HashSet<Class<?>>();
+		routeyTypes.addAll(reflections.getTypesAnnotatedWith(Route.class));
+		routeyTypes.addAll(reflections.getTypesAnnotatedWith(RouteAlias.class));
+		return routeyTypes;
 	}
 
 	static class FlowAotRoutesStatus {
 
+	}
+
+	private static List<String> getVaadinFlowPackages(BeanFactory beanFactory) {
+		var listOf = new ArrayList<String>();
+		listOf.add("com.vaadin");
+		listOf.addAll(AutoConfigurationPackages.get(beanFactory));
+		return listOf;
 	}
 
 }
