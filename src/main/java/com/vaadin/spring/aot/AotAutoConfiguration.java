@@ -5,6 +5,7 @@ import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.ComponentEvent;
 import com.vaadin.flow.component.login.LoginI18n;
 import com.vaadin.flow.component.messages.MessageListItem;
+import com.vaadin.flow.component.page.AppShellConfigurator;
 import com.vaadin.flow.router.HasErrorParameter;
 import com.vaadin.flow.router.NotFoundException;
 import com.vaadin.flow.router.Route;
@@ -13,10 +14,14 @@ import com.vaadin.flow.router.internal.DefaultErrorHandler;
 import org.apache.catalina.core.ApplicationContextFacade;
 import org.atmosphere.cache.UUIDBroadcasterCache;
 import org.atmosphere.client.TrackMessageSizeInterceptor;
+import org.atmosphere.config.managed.ManagedServiceInterceptor;
+import org.atmosphere.config.service.AtmosphereHandlerService;
 import org.atmosphere.container.JSR356AsyncSupport;
 import org.atmosphere.cpr.*;
 import org.atmosphere.interceptor.AtmosphereResourceLifecycleInterceptor;
 import org.atmosphere.interceptor.SuspendTrackerInterceptor;
+import org.atmosphere.util.AbstractBroadcasterProxy;
+import org.atmosphere.util.ExcludeSessionBroadcaster;
 import org.atmosphere.util.SimpleBroadcaster;
 import org.atmosphere.util.VoidAnnotationProcessor;
 import org.atmosphere.websocket.protocol.SimpleHttpProtocol;
@@ -98,7 +103,11 @@ class AtmosphereHintsRegistrar implements RuntimeHintsRegistrar {
 				AtmosphereResourceLifecycleInterceptor.class, TrackMessageSizeInterceptor.class,
 				SuspendTrackerInterceptor.class, DefaultBroadcasterFactory.class, SimpleBroadcaster.class,
 				DefaultBroadcaster.class, UUIDBroadcasterCache.class, VoidAnnotationProcessor.class,
-				DefaultAtmosphereResourceSessionFactory.class, JSR356AsyncSupport.class, DefaultMetaBroadcaster.class));
+				DefaultAtmosphereResourceSessionFactory.class, JSR356AsyncSupport.class, DefaultMetaBroadcaster.class,
+				AtmosphereHandlerService.class, AbstractBroadcasterProxy.class, AsyncSupportListener.class,
+				AtmosphereFrameworkListener.class, ExcludeSessionBroadcaster.class,
+				AtmosphereResourceEventListener.class, AtmosphereInterceptor.class, BroadcastFilter.class,
+				AtmosphereResource.class, AtmosphereResourceImpl.class, ManagedServiceInterceptor.class));
 		all.addAll(AtmosphereFramework.DEFAULT_ATMOSPHERE_INTERCEPTORS);
 		return all;
 	}
@@ -122,6 +131,10 @@ class FlowBeanDefinitionAotProcessor
 			var memberCategories = MemberCategory.values();
 			for (var pkg : getVaadinFlowPackages(beanFactory)) {
 				var reflections = new Reflections(pkg);
+				for (var c : reflections.getSubTypesOf(AppShellConfigurator.class)) {
+					reflection.registerType(c, memberCategories);
+					resources.registerType(c);
+				}
 				for (var c : getRouteTypesFor(reflections, pkg)) {
 					reflection.registerType(c, memberCategories);
 					resources.registerType(c);
@@ -172,7 +185,7 @@ class FlowBeanDefinitionAotProcessor
 
 		}
 		else {
-			logger.warn("the " + BeanFactory.class.getName() + " is not an instance of "
+			logger.warn("The " + BeanFactory.class.getName() + " is not an instance of "
 					+ BeanDefinitionRegistry.class.getName() + '.'
 					+ " Unable to register bean definitions for classes annotated with " + Route.class.getName()
 					+ " and " + RouteAlias.class.getName());
