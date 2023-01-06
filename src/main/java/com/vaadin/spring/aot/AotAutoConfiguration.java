@@ -6,10 +6,7 @@ import com.vaadin.flow.component.ComponentEvent;
 import com.vaadin.flow.component.login.LoginI18n;
 import com.vaadin.flow.component.messages.MessageListItem;
 import com.vaadin.flow.component.page.AppShellConfigurator;
-import com.vaadin.flow.router.HasErrorParameter;
-import com.vaadin.flow.router.NotFoundException;
-import com.vaadin.flow.router.Route;
-import com.vaadin.flow.router.RouteAlias;
+import com.vaadin.flow.router.*;
 import com.vaadin.flow.router.internal.DefaultErrorHandler;
 import org.apache.catalina.core.ApplicationContextFacade;
 import org.atmosphere.cache.UUIDBroadcasterCache;
@@ -138,6 +135,9 @@ class FlowBeanDefinitionAotProcessor
 				for (var c : getRouteTypesFor(reflections, pkg)) {
 					reflection.registerType(c, memberCategories);
 					resources.registerType(c);
+				}
+				for (var c : reflections.getSubTypesOf(RouterLayout.class)) {
+					reflection.registerType(c, memberCategories);
 				}
 				for (var c : reflections.getSubTypesOf(Component.class))
 					reflection.registerType(c, memberCategories);
