@@ -23,15 +23,22 @@ import org.springframework.aot.hint.MemberCategory;
 import org.springframework.aot.hint.RuntimeHints;
 import org.springframework.aot.hint.RuntimeHintsRegistrar;
 import org.springframework.aot.hint.TypeReference;
+import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.BeanFactory;
 import org.springframework.beans.factory.aot.BeanFactoryInitializationAotContribution;
 import org.springframework.beans.factory.aot.BeanFactoryInitializationAotProcessor;
+import org.springframework.beans.factory.config.BeanFactoryPostProcessor;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
+import org.springframework.beans.factory.support.BeanDefinitionBuilder;
+import org.springframework.beans.factory.support.BeanDefinitionRegistry;
+import org.springframework.beans.factory.support.BeanDefinitionRegistryPostProcessor;
+import org.springframework.beans.factory.support.RootBeanDefinition;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.AutoConfigurationPackages;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ImportRuntimeHints;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.util.ClassUtils;
 
 import java.util.*;
 
@@ -42,6 +49,11 @@ class AotAutoConfiguration {
 	@Bean
 	static FlowBeanFactoryInitializationAotProcessor flowBeanFactoryInitializationAotProcessor() {
 		return new FlowBeanFactoryInitializationAotProcessor();
+	}
+
+	@Bean
+	static MyBDRPP brdpp() {
+		return new MyBDRPP();
 	}
 
 }
@@ -82,6 +94,42 @@ class AtmosphereHintsRegistrar implements RuntimeHintsRegistrar {
 				DefaultAtmosphereResourceSessionFactory.class, JSR356AsyncSupport.class, DefaultMetaBroadcaster.class));
 		all.addAll(AtmosphereFramework.DEFAULT_ATMOSPHERE_INTERCEPTORS);
 		return all;
+	}
+
+}
+
+class MyBDRPP implements BeanDefinitionRegistryPostProcessor {
+
+	@Override
+	public void postProcessBeanFactory(ConfigurableListableBeanFactory beanFactory) throws BeansException {
+		//
+	}
+
+	private static List<String> getPackages(BeanFactory beanFactory) {
+		var listOf = new ArrayList<String>();
+		listOf.add("com.vaadin");
+		listOf.addAll(AutoConfigurationPackages.get(beanFactory));
+		return listOf;
+	}
+
+	@Override
+	public void postProcessBeanDefinitionRegistry(BeanDefinitionRegistry registry) throws BeansException {
+		System.out.println("postProcessBeanDefinitionRegistry");
+		if (registry instanceof BeanFactory bf) {
+			System.out.println("Registry is a bean factory");
+			for (var pkg : getPackages(bf)) {
+				System.out.println(pkg);
+				var reflections = new Reflections(pkg);
+				var routeyTypes = new HashSet<Class<?>>();
+				routeyTypes.addAll(reflections.getTypesAnnotatedWith(Route.class));
+				routeyTypes.addAll(reflections.getTypesAnnotatedWith(RouteAlias.class));
+				for (var c : routeyTypes) {
+					System.out.println(c);
+					var bd = BeanDefinitionBuilder.rootBeanDefinition(c).setScope("prototype").getBeanDefinition();
+					registry.registerBeanDefinition(c.getName(), bd);
+				}
+			}
+		}
 	}
 
 }
