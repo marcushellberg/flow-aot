@@ -27,18 +27,15 @@ import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.BeanFactory;
 import org.springframework.beans.factory.aot.BeanFactoryInitializationAotContribution;
 import org.springframework.beans.factory.aot.BeanFactoryInitializationAotProcessor;
-import org.springframework.beans.factory.config.BeanFactoryPostProcessor;
 import org.springframework.beans.factory.config.ConfigurableListableBeanFactory;
 import org.springframework.beans.factory.support.BeanDefinitionBuilder;
 import org.springframework.beans.factory.support.BeanDefinitionRegistry;
 import org.springframework.beans.factory.support.BeanDefinitionRegistryPostProcessor;
-import org.springframework.beans.factory.support.RootBeanDefinition;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.AutoConfigurationPackages;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ImportRuntimeHints;
 import org.springframework.core.io.ClassPathResource;
-import org.springframework.util.ClassUtils;
 
 import java.util.*;
 
@@ -52,8 +49,8 @@ class AotAutoConfiguration {
 	}
 
 	@Bean
-	static MyBDRPP brdpp() {
-		return new MyBDRPP();
+	static FlowBeanDefinitionRegistryPostProcessor brdpp() {
+		return new FlowBeanDefinitionRegistryPostProcessor();
 	}
 
 }
@@ -98,26 +95,39 @@ class AtmosphereHintsRegistrar implements RuntimeHintsRegistrar {
 
 }
 
-class MyBDRPP implements BeanDefinitionRegistryPostProcessor {
+abstract class FlowPackages {
 
-	@Override
-	public void postProcessBeanFactory(ConfigurableListableBeanFactory beanFactory) throws BeansException {
-		//
-	}
-
-	private static List<String> getPackages(BeanFactory beanFactory) {
+	static List<String> getPackages(BeanFactory beanFactory) {
 		var listOf = new ArrayList<String>();
 		listOf.add("com.vaadin");
 		listOf.addAll(AutoConfigurationPackages.get(beanFactory));
 		return listOf;
 	}
 
+}
+
+/**
+ * programmatically registers beans for all types annotated with {@link Route}
+ */
+class FlowBeanDefinitionRegistryPostProcessor implements BeanDefinitionRegistryPostProcessor {
+
+	@Override
+	public void postProcessBeanFactory(ConfigurableListableBeanFactory beanFactory) throws BeansException {
+		//
+	}
+
 	@Override
 	public void postProcessBeanDefinitionRegistry(BeanDefinitionRegistry registry) throws BeansException {
+		var statusBeanName = FlowAotRoutesStatus.class.getName();
 		System.out.println("postProcessBeanDefinitionRegistry");
+
+		if (registry.containsBeanDefinition(statusBeanName))
+			return;
+
 		if (registry instanceof BeanFactory bf) {
 			System.out.println("Registry is a bean factory");
-			for (var pkg : getPackages(bf)) {
+			var run = false;
+			for (var pkg : FlowPackages.getPackages(bf)) {
 				System.out.println(pkg);
 				var reflections = new Reflections(pkg);
 				var routeyTypes = new HashSet<Class<?>>();
@@ -127,9 +137,19 @@ class MyBDRPP implements BeanDefinitionRegistryPostProcessor {
 					System.out.println(c);
 					var bd = BeanDefinitionBuilder.rootBeanDefinition(c).setScope("prototype").getBeanDefinition();
 					registry.registerBeanDefinition(c.getName(), bd);
+					run = true;
 				}
+
 			}
+			if (run)
+				registry.registerBeanDefinition(statusBeanName,
+						BeanDefinitionBuilder.rootBeanDefinition(FlowAotRoutesStatus.class).getBeanDefinition());
+
 		}
+	}
+
+	static class FlowAotRoutesStatus {
+
 	}
 
 }
@@ -143,7 +163,7 @@ class FlowBeanFactoryInitializationAotProcessor implements BeanFactoryInitializa
 			var reflection = hints.reflection();
 			var resources = hints.resources();
 			var memberCategories = MemberCategory.values();
-			for (var pkg : getPackages(beanFactory)) {
+			for (var pkg : FlowPackages.getPackages(beanFactory)) {
 				var reflections = new Reflections(pkg);
 				var routeyTypes = new HashSet<Class<?>>();
 				routeyTypes.addAll(reflections.getTypesAnnotatedWith(Route.class));
@@ -165,13 +185,6 @@ class FlowBeanFactoryInitializationAotProcessor implements BeanFactoryInitializa
 					resources.registerPattern(r);
 			}
 		};
-	}
-
-	private static List<String> getPackages(BeanFactory beanFactory) {
-		var listOf = new ArrayList<String>();
-		listOf.add("com.vaadin");
-		listOf.addAll(AutoConfigurationPackages.get(beanFactory));
-		return listOf;
 	}
 
 }
